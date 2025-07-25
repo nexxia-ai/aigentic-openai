@@ -28,7 +28,7 @@ func min(a, b int) int {
 
 // OpenAI-specific request/response types
 type OpenAIChatRequest struct {
-	Model            string          `json:"ai.Model"`
+	Model            string          `json:"model"`
 	Messages         []OpenAIMessage `json:"messages"`
 	Tools            []OpenAITool    `json:"tools,omitempty"`
 	Temperature      float64         `json:"temperature,omitempty"`
@@ -83,7 +83,7 @@ type OpenAIChatResponse struct {
 	ID      string `json:"id"`
 	Object  string `json:"object"`
 	Created int64  `json:"created"`
-	Model   string `json:"ai.Model"`
+	Model   string `json:"model"`
 	Choices []struct {
 		Index   int `json:"index"`
 		Message struct {
@@ -122,8 +122,8 @@ const (
 	jitterFactor = 0.1
 )
 
-// NewOpenAIai.Model creates a new OpenAI ai.Model using the ai.Model struct
-func NewOpenAIModel(ModelName string, apiKey string) *ai.Model {
+// NewOpenAIModel creates a new OpenAI model using the model struct
+func NewOpenAIModel(modelName string, apiKey string) *ai.Model {
 	if apiKey == "" {
 		apiKey = os.Getenv("OPENAI_API_KEY")
 	}
@@ -132,7 +132,7 @@ func NewOpenAIModel(ModelName string, apiKey string) *ai.Model {
 	rand.Seed(time.Now().UnixNano())
 
 	model := &ai.Model{
-		ModelName: ModelName,
+		ModelName: modelName,
 		APIKey:    apiKey,
 		BaseURL:   "https://api.openai.com/v1",
 	}
@@ -184,7 +184,7 @@ func calculateBackoffDelay(attempt int) time.Duration {
 	return time.Duration(delay)
 }
 
-// openaiGenerateWithRetry is the generate function for OpenAI ai.Models with retry logic
+// openaiGenerateWithRetry is the generate function for OpenAI models with retry logic
 func openaiGenerateWithRetry(ctx context.Context, model *ai.Model, messages []ai.Message, tools []ai.Tool) (ai.AIMessage, error) {
 	var lastErr error
 
@@ -235,7 +235,7 @@ func openaiGenerateWithRetry(ctx context.Context, model *ai.Model, messages []ai
 	return ai.AIMessage{}, fmt.Errorf("failed to generate after %d attempts. Last error: %w", maxRetries+1, lastErr)
 }
 
-// openaiGenerate is the generate function for OpenAI ai.Models
+// openaiGenerate is the generate function for OpenAI models
 func openaiGenerate(ctx context.Context, model *ai.Model, messages []ai.Message, tools []ai.Tool) (ai.AIMessage, error) {
 	return openaiGenerateWithRetry(ctx, model, messages, tools)
 }
@@ -340,7 +340,7 @@ func openaiREST(ctx context.Context, model *ai.Model, messages []OpenAIMessage, 
 		Tools:    tools,
 	}
 
-	// Apply configuration values from ai.Model pointer fields
+	// Apply configuration values from model pointer fields
 	// Only set values that were explicitly set (non-nil pointers)
 	if model.Temperature != nil {
 		req.Temperature = *model.Temperature
@@ -377,7 +377,7 @@ func openaiREST(ctx context.Context, model *ai.Model, messages []OpenAIMessage, 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+model.APIKey)
 
-	client := &http.Client{Timeout: 10 * time.Minute} // Add timeout to prevent hanging requests ,
+	client := http.Client{Timeout: 10 * time.Minute} // Add timeout to prevent hanging requests ,
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return ai.AIMessage{}, fmt.Errorf("failed to execute request: %w", err)

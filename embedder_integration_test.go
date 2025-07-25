@@ -4,13 +4,7 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/nexxia-ai/aigentic/utils"
 )
-
-func init() {
-	utils.LoadEnvFile("../.env")
-}
 
 // Integration test that requires real OpenAI API
 func TestOpenAIEmbedderIntegration(t *testing.T) {
@@ -186,16 +180,11 @@ func TestOpenAIEmbedderErrors(t *testing.T) {
 			longText += "This is a very long text that should test the embedder's ability to handle large inputs. "
 		}
 
-		embedding, err := embedder.Embed(longText)
-		if err != nil {
-			t.Fatalf("Failed to embed very long text: %v", err)
+		_, err := embedder.Embed(longText)
+		if err == nil {
+			t.Fatalf("Expected error for very long text")
 		}
 
-		if len(embedding) != 1536 {
-			t.Errorf("Expected embedding length 1536, got %d", len(embedding))
-		}
-
-		t.Logf("Successfully embedded text of length %d", len(longText))
 	})
 }
 

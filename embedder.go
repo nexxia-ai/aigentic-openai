@@ -23,7 +23,7 @@ type OpenAIEmbedder struct {
 // OpenAIEmbeddingRequest represents a request to OpenAI's embedding API
 type OpenAIEmbeddingRequest struct {
 	Input string `json:"input"`
-	Model string `json:"ai.Model"`
+	Model string `json:"model"`
 }
 
 // OpenAIEmbeddingResponse represents a response from OpenAI's embedding API
@@ -117,7 +117,7 @@ func (e *OpenAIEmbedder) Embed(text string) ([]float64, error) {
 func (e *OpenAIEmbedder) SetModel(model string) {
 	e.Model = model
 
-	// Update dimensions based on ai.Model
+	// Update dimensions based on model
 	switch model {
 	case "text-embedding-ada-002":
 		e.Dimensions = 1536
@@ -126,7 +126,7 @@ func (e *OpenAIEmbedder) SetModel(model string) {
 	case "text-embedding-3-large":
 		e.Dimensions = 3072
 	default:
-		// Keep current dimensions if ai.Model is unknown
+		// Keep current dimensions if model is unknown
 	}
 }
 
