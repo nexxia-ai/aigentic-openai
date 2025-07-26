@@ -18,14 +18,6 @@ import (
 	"github.com/nexxia-ai/aigentic/ai"
 )
 
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // OpenAI-specific request/response types
 type OpenAIChatRequest struct {
 	Model            string          `json:"model"`
@@ -122,14 +114,11 @@ const (
 	jitterFactor = 0.1
 )
 
-// NewOpenAIModel creates a new OpenAI model using the model struct
-func NewOpenAIModel(modelName string, apiKey string) *ai.Model {
+// NewModel creates a new OpenAI model using the model struct
+func NewModel(modelName string, apiKey string) *ai.Model {
 	if apiKey == "" {
 		apiKey = os.Getenv("OPENAI_API_KEY")
 	}
-
-	// Initialize random seed for jitter calculation
-	rand.Seed(time.Now().UnixNano())
 
 	model := &ai.Model{
 		ModelName: modelName,
