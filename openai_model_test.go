@@ -1,6 +1,6 @@
 //go:build integration
 
-// run this with: go test -tags=integration -run ^TestOpenAI_StandardSuite
+// run this with: go test -v -tags=integration -run ^TestOpenAI_ModelSuite
 
 package openai
 
@@ -9,17 +9,16 @@ import (
 	"testing"
 
 	"github.com/nexxia-ai/aigentic/ai"
-	"github.com/nexxia-ai/aigentic/tests/integration"
 	"github.com/nexxia-ai/aigentic/utils"
 )
 
 func init() {
-	utils.LoadEnvFile("./.env")
+	utils.LoadEnvFile("../.env")
 }
 
 // TestOpenAI_StandardSuite runs the standard test suite against the OpenAI implementation
-func TestOpenAI_StandardSuite(t *testing.T) {
-	suite := integration.ModelTestSuite{
+func TestOpenAI_ModelSuite(t *testing.T) {
+	suite := ai.ModelTestSuite{
 		NewModel: func() *ai.Model {
 			return NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))
 		},
@@ -28,7 +27,7 @@ func TestOpenAI_StandardSuite(t *testing.T) {
 			"ProcessImage",
 		},
 	}
-	integration.RunModelTestSuite(t, suite)
+	ai.RunModelTestSuite(t, suite)
 }
 
 // TestOpenAI_IndividualTests demonstrates how to run individual tests
@@ -40,18 +39,18 @@ func TestOpenAI_IndividualTests(t *testing.T) {
 	}
 
 	t.Run("GenerateSimple", func(t *testing.T) {
-		integration.TestGenerateSimple(t, model)
+		ai.TestGenerateSimple(t, model)
 	})
 
 	t.Run("ProcessImage", func(t *testing.T) {
-		integration.TestProcessImage(t, model)
+		ai.TestProcessImage(t, model)
 	})
 
 	t.Run("ProcessAttachments", func(t *testing.T) {
-		integration.TestProcessAttachments(t, model)
+		ai.TestProcessAttachments(t, model)
 	})
 
 	t.Run("GenerateContentWithTools", func(t *testing.T) {
-		integration.TestGenerateContentWithTools(t, model)
+		ai.TestGenerateContentWithTools(t, model)
 	})
 }
