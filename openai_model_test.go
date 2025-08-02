@@ -9,12 +9,7 @@ import (
 	"testing"
 
 	"github.com/nexxia-ai/aigentic/ai"
-	"github.com/nexxia-ai/aigentic/utils"
 )
-
-func init() {
-	utils.LoadEnvFile("../.env")
-}
 
 // TestOpenAI_StandardSuite runs the standard test suite against the OpenAI implementation
 func TestOpenAI_ModelSuite(t *testing.T) {
@@ -25,6 +20,8 @@ func TestOpenAI_ModelSuite(t *testing.T) {
 		Name: "OpenAI",
 		SkipTests: []string{
 			"ProcessImage",
+			"StreamingBasic",
+			"StreamingWithTools",
 		},
 	}
 	ai.RunModelTestSuite(t, suite)

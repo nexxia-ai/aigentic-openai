@@ -6,7 +6,12 @@ import (
 	"time"
 
 	"github.com/nexxia-ai/aigentic"
+	"github.com/nexxia-ai/aigentic/utils"
 )
+
+func init() {
+	utils.LoadEnvFile("../.env")
+}
 
 func TestOpenAIEmbedder(t *testing.T) {
 	// Check for required environment variables

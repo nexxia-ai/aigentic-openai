@@ -18,13 +18,30 @@ func TestOpenAI_AgentSuite(t *testing.T) {
 		NewModel: func() *ai.Model {
 			return NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))
 		},
-		Name:      "OpenAI",
-		SkipTests: []string{}, // OpenAI supports all test types
+		Name: "OpenAI",
+		SkipTests: []string{
+			"Streaming",
+		},
 	})
 }
 
+func TestOpenAI_ToolIntegration(t *testing.T) {
+	aigentic.TestToolIntegration(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
+}
+func TestOpenAI_Streaming(t *testing.T) {
+	aigentic.TestStreaming(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
+}
+
+func TestOpenAI_MultiAgentChain(t *testing.T) {
+	aigentic.TestMultiAgentChain(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
+}
+
+func TestOpenAI_TeamCoordination(t *testing.T) {
+	aigentic.TestTeamCoordination(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
+}
+
 // TestAgent_Run_WithFileID tests the agent with OpenAI Files API integration
-func TestAgent_Run_WithFileID(t *testing.T) {
+func TestOpenAI_Agent_WithFileID(t *testing.T) {
 	// Skip if no OpenAI API key is available
 	if os.Getenv("OPENAI_API_KEY") == "" {
 		t.Fatal("Skipping OpenAI integration test: OPENAI_API_KEY not set")

@@ -262,33 +262,37 @@ func openAIConvertMessages(messages []ai.Message) []OpenAIMessage {
 		case ai.SystemMessage:
 			openaiMessages[i].Content = r.Content
 		case ai.ResourceMessage:
-			switch r.Type {
 			// Handle file IDs first (OpenAI Files API)
-			case "file":
-				// Create content array with file reference
+			if strings.HasPrefix(r.URI, "file://") {
+				// Extract file ID from URI
+				fileID := strings.TrimPrefix(r.URI, "file://")
 				contentParts := []OpenAIContentPart{
 					{
 						Type: "file",
 						File: &OpenAIFile{
-							FileID: r.Name,
+							FileID: fileID,
 						},
 					},
 				}
 
-				// Add text content if there's a description or name
+				// Add text content if there's a description, otherwise use file name
 				if r.Description != "" {
 					contentParts = append(contentParts, OpenAIContentPart{Type: "text", Text: r.Description})
+				} else if r.Name != "" {
+					contentParts = append(contentParts, OpenAIContentPart{Type: "text", Text: "File: " + r.Name})
 				}
 				openaiMessages[i].Content = contentParts
-			case "image":
-				contentParts := []OpenAIContentPart{
-					{
-						Type: "image_url",
-						Text: base64.StdEncoding.EncodeToString(r.Body.([]byte)),
-					},
+			} else if r.MIMEType != "" && strings.HasPrefix(r.MIMEType, "image/") {
+				// Handle image content with proper data URL format
+				if bodyBytes, ok := r.Body.([]byte); ok {
+					base64Data := base64.StdEncoding.EncodeToString(bodyBytes)
+					dataURL := fmt.Sprintf("data:%s;base64,%s", r.MIMEType, base64Data)
+					openaiMessages[i].Content = dataURL
+				} else {
+					// Fallback for non-byte body
+					openaiMessages[i].Content = r.Body
 				}
-				openaiMessages[i].Content = contentParts
-			default:
+			} else {
 				// Handle text content by converting bytes to string to avoid base64 encoding
 				if bodyBytes, ok := r.Body.([]byte); ok {
 					openaiMessages[i].Content = string(bodyBytes)
@@ -348,9 +352,6 @@ func openaiREST(ctx context.Context, model *ai.Model, messages []OpenAIMessage, 
 	}
 	if model.StopSequences != nil {
 		req.Stop = *model.StopSequences
-	}
-	if model.Stream != nil {
-		req.Stream = *model.Stream
 	}
 
 	reqBody, err := json.Marshal(req)
