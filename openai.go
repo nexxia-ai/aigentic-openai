@@ -531,6 +531,7 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 	scanner := bufio.NewScanner(resp.Body)
 	var finalMessage ai.AIMessage
 	var accumulatedContent strings.Builder
+	var accumulatedThink strings.Builder
 	var toolCallsMap = make(map[int]*ai.ToolCall)
 	var responseID string
 	var responseCreated int64
@@ -576,9 +577,11 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 		if len(chunk.Choices) > 0 {
 			choice := chunk.Choices[0]
 
-			// Accumulate content
+			// Handle new content from this chunk
+			var newContent string
 			if choice.Delta.Content != "" {
-				accumulatedContent.WriteString(choice.Delta.Content)
+				newContent = choice.Delta.Content
+				accumulatedContent.WriteString(newContent)
 			}
 
 			// Handle tool calls
@@ -614,10 +617,19 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 				}
 			}
 
-			// Create partial message for chunk function
+			// Extract think tags from the new content only
+			contentForChunk, thinkForChunk := ai.ExtractThinkTags(newContent)
+
+			// Accumulate think content separately
+			if thinkForChunk != "" {
+				accumulatedThink.WriteString(thinkForChunk)
+			}
+
+			// Create partial message for chunk function (only new content without think tags)
 			partialMessage := ai.AIMessage{
 				Role:      finalMessage.Role,
-				Content:   accumulatedContent.String(),
+				Content:   contentForChunk,
+				Think:     accumulatedThink.String(),
 				ToolCalls: toolCalls,
 			}
 
@@ -637,8 +649,18 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 		return ai.AIMessage{}, fmt.Errorf("error reading SSE stream: %w", err)
 	}
 
-	// Set final accumulated content and tool calls
-	finalMessage.Content = accumulatedContent.String()
+	// Extract think tags from final accumulated content
+	finalContent, finalThink := ai.ExtractThinkTags(accumulatedContent.String())
+
+	// Combine accumulated think content with final think content
+	if finalThink != "" {
+		accumulatedThink.WriteString(finalThink)
+	}
+
+	// Set final accumulated content (without think tags) and think content
+	finalMessage.Content = finalContent
+	finalMessage.Think = accumulatedThink.String()
+
 	var finalToolCalls []ai.ToolCall
 	for i := 0; i < len(toolCallsMap); i++ {
 		if toolCall, exists := toolCallsMap[i]; exists {
