@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -32,6 +33,23 @@ type OpenAIChatRequest struct {
 	Stream           bool            `json:"stream,omitempty"`
 }
 
+// OpenAIChatStreamResponse represents a streaming chunk from OpenAI
+type OpenAIChatStreamResponse struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	Model   string `json:"model"`
+	Choices []struct {
+		Index int `json:"index"`
+		Delta struct {
+			Role      string           `json:"role,omitempty"`
+			Content   string           `json:"content,omitempty"`
+			ToolCalls []OpenAIToolCall `json:"tool_calls,omitempty"`
+		} `json:"delta"`
+		FinishReason string `json:"finish_reason,omitempty"`
+	} `json:"choices"`
+}
+
 // OpenAIContentPart represents a single content part in a message
 type OpenAIContentPart struct {
 	Type string      `json:"type"`
@@ -52,6 +70,7 @@ type OpenAIMessage struct {
 }
 
 type OpenAIToolCall struct {
+	Index        int    `json:"index,omitempty"`
 	ID           string `json:"id"`
 	Type         string `json:"type"`
 	FunctionCall struct {
@@ -126,6 +145,7 @@ func NewModel(modelName string, apiKey string) *ai.Model {
 		BaseURL:   "https://api.openai.com/v1",
 	}
 	model.SetGenerateFunc(openaiGenerate)
+	model.SetStreamingFunc(openaiStream)
 	return model
 }
 
@@ -227,6 +247,16 @@ func openaiGenerateWithRetry(ctx context.Context, model *ai.Model, messages []ai
 // openaiGenerate is the generate function for OpenAI models
 func openaiGenerate(ctx context.Context, model *ai.Model, messages []ai.Message, tools []ai.Tool) (ai.AIMessage, error) {
 	return openaiGenerateWithRetry(ctx, model, messages, tools)
+}
+
+// openaiStream is the streaming function for OpenAI models
+func openaiStream(ctx context.Context, model *ai.Model, messages []ai.Message, tools []ai.Tool, chunkFunction func(ai.AIMessage) error) (ai.AIMessage, error) {
+	// Convert our message format to OpenAI's format
+	openaiMessages := openAIConvertMessages(messages)
+	openaiTools := openAIConvertTools(tools)
+
+	// Make streaming call to OpenAI API
+	return openaiStreamREST(ctx, model, openaiMessages, openaiTools, chunkFunction)
 }
 
 // openAIConvertMessages converts our message format to OpenAI's format
@@ -432,4 +462,198 @@ func openaiREST(ctx context.Context, model *ai.Model, messages []OpenAIMessage, 
 	}
 
 	return msg, nil
+}
+
+// openaiStreamREST makes a streaming call to the OpenAI API
+func openaiStreamREST(ctx context.Context, model *ai.Model, messages []OpenAIMessage, tools []OpenAITool, chunkFunction func(ai.AIMessage) error) (ai.AIMessage, error) {
+	req := &OpenAIChatRequest{
+		Model:    model.ModelName,
+		Messages: messages,
+		Tools:    tools,
+		Stream:   true, // Enable streaming
+	}
+
+	// Apply configuration values from model pointer fields
+	if model.Temperature != nil {
+		req.Temperature = *model.Temperature
+	}
+	if model.MaxTokens != nil {
+		req.MaxTokens = *model.MaxTokens
+	}
+	if model.TopP != nil {
+		req.TopP = *model.TopP
+	}
+	if model.FrequencyPenalty != nil {
+		req.FrequencyPenalty = *model.FrequencyPenalty
+	}
+	if model.PresencePenalty != nil {
+		req.PresencePenalty = *model.PresencePenalty
+	}
+	if model.StopSequences != nil {
+		req.Stop = *model.StopSequences
+	}
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return ai.AIMessage{}, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", model.BaseURL+"/chat/completions", bytes.NewReader(reqBody))
+	if err != nil {
+		return ai.AIMessage{}, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+model.APIKey)
+
+	client := http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return ai.AIMessage{}, fmt.Errorf("failed to execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return ai.AIMessage{}, &ai.StatusError{
+			StatusCode:   resp.StatusCode,
+			Status:       resp.Status,
+			ErrorMessage: string(respBody),
+		}
+	}
+
+	// Parse SSE response
+	return parseSSEResponse(resp, chunkFunction)
+}
+
+// parseSSEResponse parses Server-Sent Events from OpenAI streaming API
+func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) error) (ai.AIMessage, error) {
+	scanner := bufio.NewScanner(resp.Body)
+	var finalMessage ai.AIMessage
+	var accumulatedContent strings.Builder
+	var toolCallsMap = make(map[int]*ai.ToolCall)
+	var responseID string
+	var responseCreated int64
+	var responseModel string
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip empty lines
+		if line == "" {
+			continue
+		}
+
+		// Check for [DONE] message
+		if line == "data: [DONE]" {
+			break
+		}
+
+		// Parse data lines (start with "data: ")
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+
+		// Extract JSON data
+		jsonData := strings.TrimPrefix(line, "data: ")
+
+		// Parse the JSON chunk
+		var chunk OpenAIChatStreamResponse
+		if err := json.Unmarshal([]byte(jsonData), &chunk); err != nil {
+			// Log the error but continue processing other chunks
+			slog.Warn("Failed to parse SSE chunk", "error", err, "data", jsonData)
+			continue
+		}
+
+		// Store response metadata from first chunk
+		if responseID == "" {
+			responseID = chunk.ID
+			responseCreated = chunk.Created
+			responseModel = chunk.Model
+		}
+
+		// Process the chunk
+		if len(chunk.Choices) > 0 {
+			choice := chunk.Choices[0]
+
+			// Accumulate content
+			if choice.Delta.Content != "" {
+				accumulatedContent.WriteString(choice.Delta.Content)
+			}
+
+			// Handle tool calls
+			if len(choice.Delta.ToolCalls) > 0 {
+				for _, deltaToolCall := range choice.Delta.ToolCalls {
+					index := deltaToolCall.Index
+
+					if toolCallsMap[index] == nil {
+						toolCallsMap[index] = &ai.ToolCall{
+							ID:   deltaToolCall.ID,
+							Type: deltaToolCall.Type,
+							Name: deltaToolCall.FunctionCall.Name,
+						}
+					}
+
+					// Accumulate arguments
+					if deltaToolCall.FunctionCall.Arguments != "" {
+						toolCallsMap[index].Args += deltaToolCall.FunctionCall.Arguments
+					}
+				}
+			}
+
+			// Set role if provided
+			if choice.Delta.Role != "" && finalMessage.Role == "" {
+				finalMessage.Role = ai.MessageRole(choice.Delta.Role)
+			}
+
+			// Convert tool calls map to slice
+			var toolCalls []ai.ToolCall
+			for i := 0; i < len(toolCallsMap); i++ {
+				if toolCall, exists := toolCallsMap[i]; exists {
+					toolCalls = append(toolCalls, *toolCall)
+				}
+			}
+
+			// Create partial message for chunk function
+			partialMessage := ai.AIMessage{
+				Role:      finalMessage.Role,
+				Content:   accumulatedContent.String(),
+				ToolCalls: toolCalls,
+			}
+
+			// Call chunk function with partial message
+			if err := chunkFunction(partialMessage); err != nil {
+				return ai.AIMessage{}, err
+			}
+
+			// Check if streaming is complete
+			if choice.FinishReason != "" {
+				break
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return ai.AIMessage{}, fmt.Errorf("error reading SSE stream: %w", err)
+	}
+
+	// Set final accumulated content and tool calls
+	finalMessage.Content = accumulatedContent.String()
+	var finalToolCalls []ai.ToolCall
+	for i := 0; i < len(toolCallsMap); i++ {
+		if toolCall, exists := toolCallsMap[i]; exists {
+			finalToolCalls = append(finalToolCalls, *toolCall)
+		}
+	}
+	finalMessage.ToolCalls = finalToolCalls
+
+	// Set response metadata
+	finalMessage.Response = ai.Response{
+		ID:      responseID,
+		Object:  "chat.completion",
+		Created: responseCreated,
+		Model:   responseModel,
+	}
+
+	return finalMessage, nil
 }

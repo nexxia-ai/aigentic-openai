@@ -18,26 +18,13 @@ func TestOpenAI_AgentSuite(t *testing.T) {
 		NewModel: func() *ai.Model {
 			return NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))
 		},
-		Name: "OpenAI",
-		SkipTests: []string{
-			"Streaming",
-		},
+		Name:      "OpenAI",
+		SkipTests: []string{},
 	})
 }
 
 func TestOpenAI_ToolIntegration(t *testing.T) {
 	aigentic.TestToolIntegration(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
-}
-func TestOpenAI_Streaming(t *testing.T) {
-	aigentic.TestStreaming(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
-}
-
-func TestOpenAI_MultiAgentChain(t *testing.T) {
-	aigentic.TestMultiAgentChain(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
-}
-
-func TestOpenAI_TeamCoordination(t *testing.T) {
-	aigentic.TestTeamCoordination(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
 }
 
 // TestAgent_Run_WithFileID tests the agent with OpenAI Files API integration

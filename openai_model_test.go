@@ -20,8 +20,6 @@ func TestOpenAI_ModelSuite(t *testing.T) {
 		Name: "OpenAI",
 		SkipTests: []string{
 			"ProcessImage",
-			"StreamingBasic",
-			"StreamingWithTools",
 		},
 	}
 	ai.RunModelTestSuite(t, suite)
