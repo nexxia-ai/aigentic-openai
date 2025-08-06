@@ -3,7 +3,7 @@ module github.com/nexxia-ai/aigentic-openai
 go 1.24.3
 
 require (
-	github.com/nexxia-ai/aigentic v0.1.1-0.20250801115812-e5ebf355dfe6
+	github.com/nexxia-ai/aigentic v0.2.1-0.20250806181302-1fb3c6a240d4
 	github.com/stretchr/testify v1.10.0
 )
 
