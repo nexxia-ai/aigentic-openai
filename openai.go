@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
-	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -125,14 +123,6 @@ type OpenAIChatResponse struct {
 	ServiceTier string `json:"service_tier"`
 }
 
-// Retry configuration
-const (
-	maxRetries   = 5
-	baseDelay    = 1 * time.Second
-	maxDelay     = 30 * time.Second
-	jitterFactor = 0.1
-)
-
 // NewModel creates a new OpenAI model using the model struct
 func NewModel(modelName string, apiKey string) *ai.Model {
 	if apiKey == "" {
@@ -150,9 +140,9 @@ func NewModel(modelName string, apiKey string) *ai.Model {
 }
 
 // isRetryableError checks if an error should trigger a retry
-func isRetryableError(err error) bool {
+func isRetryableError(err error) error {
 	if err == nil {
-		return false
+		return nil
 	}
 
 	errStr := err.Error()
@@ -162,7 +152,7 @@ func isRetryableError(err error) bool {
 		strings.Contains(errStr, "status: 503") ||
 		strings.Contains(errStr, "status: 504") ||
 		strings.Contains(errStr, "status: 429") {
-		return true
+		return fmt.Errorf("%w: %v", ai.ErrTemporary, err)
 	}
 
 	// Check for network-related errors
@@ -170,92 +160,23 @@ func isRetryableError(err error) bool {
 		strings.Contains(errStr, "timeout") ||
 		strings.Contains(errStr, "network") ||
 		strings.Contains(errStr, "temporary") {
-		return true
+		return fmt.Errorf("%w: %v", ai.ErrTemporary, err)
 	}
 
-	return false
-}
-
-// calculateBackoffDelay calculates the delay for the next retry with exponential backoff and jitter
-func calculateBackoffDelay(attempt int) time.Duration {
-	// Exponential backoff: baseDelay * 2^attempt
-	delay := float64(baseDelay) * math.Pow(2, float64(attempt))
-
-	// Cap the delay at maxDelay
-	if delay > float64(maxDelay) {
-		delay = float64(maxDelay)
-	}
-
-	// Add jitter to prevent thundering herd
-	jitter := delay * jitterFactor * rand.Float64()
-	delay += jitter
-
-	return time.Duration(delay)
-}
-
-// openaiGenerateWithRetry is the generate function for OpenAI models with retry logic
-func openaiGenerateWithRetry(ctx context.Context, model *ai.Model, messages []ai.Message, tools []ai.Tool) (ai.AIMessage, error) {
-	var lastErr error
-
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Convert our message format to OpenAI's format
-		openaiMessages := openAIConvertMessages(messages)
-		openaiTools := openAIConvertTools(tools)
-
-		// Make a single LLM call
-		response, err := openaiREST(ctx, model, openaiMessages, openaiTools)
-		if err == nil {
-			// Success - return the response
-			return response, nil
-		}
-
-		lastErr = err
-
-		// Check if this is a retryable error
-		if !isRetryableError(err) {
-			// Non-retryable error - return immediately
-			return ai.AIMessage{}, fmt.Errorf("failed to generate (non-retryable): %w", err)
-		}
-
-		// If this is the last attempt, don't retry
-		if attempt == maxRetries {
-			break
-		}
-
-		// Calculate delay for next retry
-		delay := calculateBackoffDelay(attempt)
-
-		slog.Warn("OpenAI API request failed, retrying",
-			"attempt", attempt+1,
-			"max_attempts", maxRetries+1,
-			"delay", delay,
-			"error", err.Error())
-
-		// Wait before retrying
-		select {
-		case <-ctx.Done():
-			return ai.AIMessage{}, fmt.Errorf("context cancelled during retry: %w", ctx.Err())
-		case <-time.After(delay):
-			// Continue to next attempt
-		}
-	}
-
-	// All retries exhausted
-	return ai.AIMessage{}, fmt.Errorf("failed to generate after %d attempts. Last error: %w", maxRetries+1, lastErr)
+	return err
 }
 
 // openaiGenerate is the generate function for OpenAI models
 func openaiGenerate(ctx context.Context, model *ai.Model, messages []ai.Message, tools []ai.Tool) (ai.AIMessage, error) {
-	return openaiGenerateWithRetry(ctx, model, messages, tools)
+	openaiMessages := openAIConvertMessages(messages)
+	openaiTools := openAIConvertTools(tools)
+	return openaiREST(ctx, model, openaiMessages, openaiTools)
 }
 
 // openaiStream is the streaming function for OpenAI models
 func openaiStream(ctx context.Context, model *ai.Model, messages []ai.Message, tools []ai.Tool, chunkFunction func(ai.AIMessage) error) (ai.AIMessage, error) {
-	// Convert our message format to OpenAI's format
 	openaiMessages := openAIConvertMessages(messages)
 	openaiTools := openAIConvertTools(tools)
-
-	// Make streaming call to OpenAI API
 	return openaiStreamREST(ctx, model, openaiMessages, openaiTools, chunkFunction)
 }
 
@@ -386,41 +307,42 @@ func openaiREST(ctx context.Context, model *ai.Model, messages []OpenAIMessage, 
 
 	reqBody, err := json.Marshal(req)
 	if err != nil {
-		return ai.AIMessage{}, fmt.Errorf("failed to marshal request: %w", err)
+		return ai.AIMessage{}, err
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", model.BaseURL+"/chat/completions", bytes.NewReader(reqBody))
 	if err != nil {
-		return ai.AIMessage{}, fmt.Errorf("failed to create request: %w", err)
+		return ai.AIMessage{}, err
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+model.APIKey)
 
-	client := http.Client{Timeout: 10 * time.Minute} // Add timeout to prevent hanging requests ,
+	client := http.Client{Timeout: 10 * time.Minute}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return ai.AIMessage{}, fmt.Errorf("failed to execute request: %w", err)
+		return ai.AIMessage{}, isRetryableError(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return ai.AIMessage{}, &ai.StatusError{
+		errStatus := &ai.StatusError{
 			StatusCode:   resp.StatusCode,
 			Status:       resp.Status,
 			ErrorMessage: string(respBody),
 		}
+		return ai.AIMessage{}, isRetryableError(errStatus)
 	}
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ai.AIMessage{}, fmt.Errorf("failed to read response body: %w", err)
+		return ai.AIMessage{}, isRetryableError(err)
 	}
 
 	var openaiResp OpenAIChatResponse
 	if err := json.Unmarshal(respBody, &openaiResp); err != nil {
-		return ai.AIMessage{}, fmt.Errorf("failed to decode response body: %w", err)
+		return ai.AIMessage{}, isRetryableError(err)
 	}
 
 	if len(openaiResp.Choices) == 0 {
@@ -495,12 +417,12 @@ func openaiStreamREST(ctx context.Context, model *ai.Model, messages []OpenAIMes
 
 	reqBody, err := json.Marshal(req)
 	if err != nil {
-		return ai.AIMessage{}, fmt.Errorf("failed to marshal request: %w", err)
+		return ai.AIMessage{}, err
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", model.BaseURL+"/chat/completions", bytes.NewReader(reqBody))
 	if err != nil {
-		return ai.AIMessage{}, fmt.Errorf("failed to create request: %w", err)
+		return ai.AIMessage{}, err
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -509,17 +431,18 @@ func openaiStreamREST(ctx context.Context, model *ai.Model, messages []OpenAIMes
 	client := http.Client{Timeout: 10 * time.Minute}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return ai.AIMessage{}, fmt.Errorf("failed to execute request: %w", err)
+		return ai.AIMessage{}, isRetryableError(err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
-		return ai.AIMessage{}, &ai.StatusError{
+		errStatus := &ai.StatusError{
 			StatusCode:   resp.StatusCode,
 			Status:       resp.Status,
 			ErrorMessage: string(respBody),
 		}
+		return ai.AIMessage{}, isRetryableError(errStatus)
 	}
 
 	// Parse SSE response

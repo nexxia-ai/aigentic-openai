@@ -25,6 +25,6 @@ func TestOpenAI_ModelSuite(t *testing.T) {
 	ai.RunModelTestSuite(t, suite)
 }
 
-func TestOpenAI_StreamingBasic(t *testing.T) {
-	ai.TestStreamingBasic(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
+func TODO_TestOpenAI_ProcessImage(t *testing.T) {
+	ai.TestProcessImage(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
 }

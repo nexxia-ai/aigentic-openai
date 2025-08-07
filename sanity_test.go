@@ -4,7 +4,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/nexxia-ai/aigentic/ai"
 )
@@ -70,52 +69,9 @@ func TestIsRetryableError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := isRetryableError(tt.err)
-			if result != tt.expected {
-				t.Errorf("isRetryableError(%v) = %v, want %v", tt.err, result, tt.expected)
-			}
-		})
-	}
-}
-
-func TestCalculateBackoffDelay(t *testing.T) {
-	tests := []struct {
-		name     string
-		attempt  int
-		expected time.Duration
-	}{
-		{
-			name:     "First attempt",
-			attempt:  0,
-			expected: time.Second, // baseDelay
-		},
-		{
-			name:     "Second attempt",
-			attempt:  1,
-			expected: 2 * time.Second, // baseDelay * 2^1
-		},
-		{
-			name:     "Third attempt",
-			attempt:  2,
-			expected: 4 * time.Second, // baseDelay * 2^2
-		},
-		{
-			name:     "High attempt (should be capped)",
-			attempt:  10,
-			expected: maxDelay, // Should be capped at maxDelay
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := calculateBackoffDelay(tt.attempt)
-
-			// Allow for jitter variation (±10% of expected)
-			minExpected := time.Duration(float64(tt.expected) * 0.9)
-			maxExpected := time.Duration(float64(tt.expected) * 1.1)
-
-			if result < minExpected || result > maxExpected {
-				t.Errorf("calculateBackoffDelay(%d) = %v, want between %v and %v",
-					tt.attempt, result, minExpected, maxExpected)
+			isRetryable := errors.Is(result, ai.ErrTemporary)
+			if isRetryable != tt.expected {
+				t.Errorf("isRetryableError(%v) = %v, want %v", tt.err, isRetryable, tt.expected)
 			}
 		})
 	}
@@ -125,7 +81,8 @@ func TestRetryErrorMessages(t *testing.T) {
 	// Test that retry error messages are properly formatted
 	err := errors.New("status: 502 Bad Gateway, code: 502")
 
-	if !isRetryableError(err) {
+	result := isRetryableError(err)
+	if !errors.Is(result, ai.ErrTemporary) {
 		t.Error("502 error should be retryable")
 	}
 

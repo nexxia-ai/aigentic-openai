@@ -23,10 +23,6 @@ func TestOpenAI_AgentSuite(t *testing.T) {
 	})
 }
 
-func TestOpenAI_ToolIntegration(t *testing.T) {
-	aigentic.TestToolIntegration(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
-}
-
 // TestAgent_Run_WithFileID tests the agent with OpenAI Files API integration
 func TestOpenAI_Agent_WithFileID(t *testing.T) {
 	// Skip if no OpenAI API key is available
@@ -40,11 +36,11 @@ func TestOpenAI_Agent_WithFileID(t *testing.T) {
 	fileDoc := aigentic.NewInMemoryDocument("file-WjBr55R67mVmhXCsvKZ6Zs", "document.pdf", nil, nil)
 
 	agent := aigentic.Agent{
-		Model:                model,
-		Description:          "You are a helpful assistant that analyzes files and provides insights.",
-		Instructions:         "When you see a file reference, analyze it and provide a summary. If you cannot access the file, explain why.",
-		Trace:                aigentic.NewTrace(),
-		AttachmentReferences: []aigentic.Document{fileDoc},
+		Model:              model,
+		Description:        "You are a helpful assistant that analyzes files and provides insights.",
+		Instructions:       "When you see a file reference, analyze it and provide a summary. If you cannot access the file, explain why.",
+		Trace:              aigentic.NewTrace(),
+		DocumentReferences: []*aigentic.Document{&fileDoc},
 	}
 
 	// Test the agent with file ID
