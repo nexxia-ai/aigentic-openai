@@ -18,9 +18,16 @@ func TestOpenAI_AgentSuite(t *testing.T) {
 		NewModel: func() *ai.Model {
 			return NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))
 		},
-		Name:      "OpenAI",
-		SkipTests: []string{},
+		Name: "OpenAI",
+		SkipTests: []string{
+			"TeamCoordination",
+		},
 	})
+}
+
+func TestOpenAI_TeamCoordination(t *testing.T) {
+	model := NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))
+	aigentic.TestTeamCoordination(t, model)
 }
 
 // TestAgent_Run_WithFileID tests the agent with OpenAI Files API integration

@@ -532,33 +532,28 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 				finalMessage.Role = ai.MessageRole(choice.Delta.Role)
 			}
 
-			// Convert tool calls map to slice
-			var toolCalls []ai.ToolCall
-			for i := 0; i < len(toolCallsMap); i++ {
-				if toolCall, exists := toolCallsMap[i]; exists {
-					toolCalls = append(toolCalls, *toolCall)
+			// Only send chunks when there's actually new content
+			if newContent != "" || len(choice.Delta.ToolCalls) > 0 {
+				// Extract think tags from the new content only
+				contentForChunk, thinkForChunk := ai.ExtractThinkTags(newContent)
+
+				// Accumulate think content separately
+				if thinkForChunk != "" {
+					accumulatedThink.WriteString(thinkForChunk)
 				}
-			}
 
-			// Extract think tags from the new content only
-			contentForChunk, thinkForChunk := ai.ExtractThinkTags(newContent)
+				// Create partial message for chunk function (only new content, no accumulated data)
+				partialMessage := ai.AIMessage{
+					Role:    finalMessage.Role,
+					Content: contentForChunk,
+					Think:   thinkForChunk,
+					// Don't send ToolCalls in streaming chunks - they'll be in the final message
+				}
 
-			// Accumulate think content separately
-			if thinkForChunk != "" {
-				accumulatedThink.WriteString(thinkForChunk)
-			}
-
-			// Create partial message for chunk function (only new content without think tags)
-			partialMessage := ai.AIMessage{
-				Role:      finalMessage.Role,
-				Content:   contentForChunk,
-				Think:     accumulatedThink.String(),
-				ToolCalls: toolCalls,
-			}
-
-			// Call chunk function with partial message
-			if err := chunkFunction(partialMessage); err != nil {
-				return ai.AIMessage{}, err
+				// Call chunk function with partial message
+				if err := chunkFunction(partialMessage); err != nil {
+					return ai.AIMessage{}, err
+				}
 			}
 
 			// Check if streaming is complete

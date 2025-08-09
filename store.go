@@ -6,12 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"mime"
 	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -109,39 +106,6 @@ func (fm *OpenAIStore) DeleteDocument(ctx context.Context, docID string) error {
 	fm.mu.Unlock()
 
 	return nil
-}
-
-// loadDocumentFromOpenAI loads document content from OpenAI
-func (fm *OpenAIStore) loadDocumentFromOpenAI(doc *aigentic.Document) ([]byte, error) {
-	ctx := context.Background()
-
-	// Create request to download file content
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/files/%s/content", fm.baseURL, doc.ID()), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+fm.apiKey)
-
-	// Make request
-	resp, err := fm.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to download file: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("download failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Read content
-	content, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file content: %w", err)
-	}
-
-	return content, nil
 }
 
 // ListDocuments retrieves documents created by this instance
@@ -242,105 +206,6 @@ func (fm *OpenAIStore) Close(ctx context.Context) error {
 	}
 
 	return nil
-}
-
-// getMimeType determines the MIME type based on file extension
-func getMimeType(filePath string) string {
-	ext := filepath.Ext(filePath)
-	mimeType := mime.TypeByExtension(ext)
-	if mimeType == "" {
-		// Default to application/octet-stream for unknown extensions
-		return "application/octet-stream"
-	}
-	// Remove charset suffix for consistency
-	if strings.Contains(mimeType, ";") {
-		mimeType = strings.Split(mimeType, ";")[0]
-	}
-	return mimeType
-}
-
-// uploadToOpenAI uploads a file to OpenAI's file API
-func (fm *OpenAIStore) uploadToOpenAI(ctx context.Context, file *os.File, filename string, size int64) (string, error) {
-	// Retry logic for server errors
-	maxRetries := 3
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		// Reset file pointer to beginning for retries
-		if attempt > 1 {
-			if _, err := file.Seek(0, 0); err != nil {
-				return "", fmt.Errorf("failed to reset file pointer: %w", err)
-			}
-		}
-
-		// Create multipart form
-		var buf bytes.Buffer
-		writer := multipart.NewWriter(&buf)
-
-		// Add file field
-		part, err := writer.CreateFormFile("file", filename)
-		if err != nil {
-			return "", fmt.Errorf("failed to create form file: %w", err)
-		}
-
-		// Copy file content
-		_, err = io.Copy(part, file)
-		if err != nil {
-			return "", fmt.Errorf("failed to copy file content: %w", err)
-		}
-
-		// Add purpose field
-		err = writer.WriteField("purpose", "assistants")
-		if err != nil {
-			return "", fmt.Errorf("failed to add purpose field: %w", err)
-		}
-
-		writer.Close()
-
-		// Create request
-		req, err := http.NewRequestWithContext(ctx, "POST", fm.baseURL+"/files", &buf)
-		if err != nil {
-			return "", fmt.Errorf("failed to create request: %w", err)
-		}
-
-		req.Header.Set("Authorization", "Bearer "+fm.apiKey)
-		req.Header.Set("Content-Type", writer.FormDataContentType())
-
-		// Make request
-		resp, err := fm.client.Do(req)
-		if err != nil {
-			return "", fmt.Errorf("failed to upload file: %w", err)
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK {
-			// Parse response
-			var uploadResp struct {
-				ID string `json:"id"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&uploadResp); err != nil {
-				return "", fmt.Errorf("failed to decode response: %w", err)
-			}
-			return uploadResp.ID, nil
-		}
-
-		body, _ := io.ReadAll(resp.Body)
-
-		// If it's a server error (5xx), retry with exponential backoff
-		if resp.StatusCode >= 500 && resp.StatusCode < 600 && attempt < maxRetries {
-			// Wait before retrying (exponential backoff)
-			backoff := time.Duration(attempt) * time.Second
-			select {
-			case <-ctx.Done():
-				return "", ctx.Err()
-			case <-time.After(backoff):
-				continue
-			}
-		}
-
-		// For non-retryable errors or final attempt, return the error
-		return "", fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return "", fmt.Errorf("upload failed after %d attempts", maxRetries)
 }
 
 // uploadBytesToOpenAI uploads a document to OpenAI's file API
