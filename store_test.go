@@ -50,7 +50,7 @@ func TestSimpleAddAndDelete(t *testing.T) {
 	inputDoc.FilePath = tempFile.Name()
 
 	// Upload file
-	doc, err := fileManager.AddDocument(context.Background(), &inputDoc)
+	doc, err := fileManager.AddDocument(context.Background(), inputDoc)
 	if err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
@@ -136,7 +136,7 @@ End of file.`
 	inputDoc.FilePath = tempFile.Name()
 
 	// Upload file
-	doc, err := fileManager.AddDocument(context.Background(), &inputDoc)
+	doc, err := fileManager.AddDocument(context.Background(), inputDoc)
 	if err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
@@ -235,7 +235,7 @@ func TestMultipleFiles(t *testing.T) {
 		inputDoc.FilePath = tempFile.Name()
 
 		// Upload file
-		doc, err := fileManager.AddDocument(context.Background(), &inputDoc)
+		doc, err := fileManager.AddDocument(context.Background(), inputDoc)
 		if err != nil {
 			t.Fatalf("Failed to add file %d: %v", i, err)
 		}
@@ -325,7 +325,7 @@ func TestFileContentRetrieval(t *testing.T) {
 	inputDoc.FilePath = tempFile.Name()
 
 	// Upload file
-	doc, err := fileManager.AddDocument(context.Background(), &inputDoc)
+	doc, err := fileManager.AddDocument(context.Background(), inputDoc)
 	if err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestCleanupOnClose(t *testing.T) {
 	inputDoc.FilePath = tempFile.Name()
 
 	// Upload file
-	doc, err := testFileManager.AddDocument(context.Background(), &inputDoc)
+	doc, err := testFileManager.AddDocument(context.Background(), inputDoc)
 	if err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
@@ -456,7 +456,7 @@ func TestOpenByFileID(t *testing.T) {
 	inputDoc.FilePath = tempFile.Name()
 
 	// Upload file to get a file ID
-	uploadedDoc, err := fileManager.AddDocument(context.Background(), &inputDoc)
+	uploadedDoc, err := fileManager.AddDocument(context.Background(), inputDoc)
 	if err != nil {
 		t.Fatalf("Failed to add file: %v", err)
 	}
@@ -522,7 +522,7 @@ func TestErrorHandling(t *testing.T) {
 		nonExistentDoc := aigentic.NewInMemoryDocument("non-existent-file.txt", "non-existent-file.txt", []byte{}, nil)
 		nonExistentDoc.FilePath = "non-existent-file.txt"
 
-		_, err := fileManager.AddDocument(context.Background(), &nonExistentDoc)
+		_, err := fileManager.AddDocument(context.Background(), nonExistentDoc)
 		if err == nil {
 			t.Error("Expected error when uploading non-existent file")
 		} else {

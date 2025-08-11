@@ -61,10 +61,10 @@ func (fm *OpenAIStore) Open(ctx context.Context, fileID string) (*aigentic.Docum
 
 	// Store in memory
 	fm.mu.Lock()
-	fm.docs[fileID] = &doc
+	fm.docs[fileID] = doc
 	fm.mu.Unlock()
 
-	return &doc, nil
+	return doc, nil
 }
 
 // AddDocument uploads a document to OpenAI and returns the document
@@ -86,10 +86,10 @@ func (fm *OpenAIStore) AddDocument(ctx context.Context, doc *aigentic.Document) 
 
 	// Store in memory
 	fm.mu.Lock()
-	fm.docs[fileID] = &uploadedDoc
+	fm.docs[fileID] = uploadedDoc
 	fm.mu.Unlock()
 
-	return &uploadedDoc, nil
+	return uploadedDoc, nil
 }
 
 // DeleteDocument deletes a document from OpenAI
@@ -162,7 +162,7 @@ func (fm *OpenAIStore) ListAllDocuments(ctx context.Context) ([]*aigentic.Docume
 			var docs []*aigentic.Document
 			for _, file := range listResp.Data {
 				doc := aigentic.NewInMemoryDocument(file.ID, file.Filename, []byte{}, nil)
-				docs = append(docs, &doc)
+				docs = append(docs, doc)
 			}
 
 			return docs, nil

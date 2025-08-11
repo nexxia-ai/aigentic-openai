@@ -25,6 +25,11 @@ func TestOpenAI_AgentSuite(t *testing.T) {
 	})
 }
 
+func TestOpenAI_BasicAgent(t *testing.T) {
+	model := NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))
+	aigentic.TestBasicAgent(t, model)
+}
+
 func TestOpenAI_TeamCoordination(t *testing.T) {
 	model := NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))
 	aigentic.TestTeamCoordination(t, model)
@@ -47,10 +52,10 @@ func TestOpenAI_Agent_WithFileID(t *testing.T) {
 		Description:        "You are a helpful assistant that analyzes files and provides insights.",
 		Instructions:       "When you see a file reference, analyze it and provide a summary. If you cannot access the file, explain why.",
 		Trace:              aigentic.NewTrace(),
-		DocumentReferences: []*aigentic.Document{&fileDoc},
+		DocumentReferences: []*aigentic.Document{fileDoc},
 	}
 
 	// Test the agent with file ID
-	_, err := agent.RunAndWait("Please analyze the attached file and tell me what it contains. If you can access it, start your response with 'SUCCESS:' followed by the analysis.")
+	_, err := agent.Execute("Please analyze the attached file and tell me what it contains. If you can access it, start your response with 'SUCCESS:' followed by the analysis.")
 	assert.NoError(t, err)
 }
