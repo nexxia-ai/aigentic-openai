@@ -121,12 +121,23 @@ func (fm *OpenAIStore) ListDocuments() []*aigentic.Document {
 	return docs
 }
 
-// ListAllDocuments retrieves all documents from OpenAI and returns them
-func (fm *OpenAIStore) ListAllDocuments(ctx context.Context) ([]*aigentic.Document, error) {
-	// Retry logic for server errors
+// FileInfo represents file information from OpenAI API
+type FileInfo struct {
+	ID        string `json:"id"`
+	Object    string `json:"object"`
+	Bytes     int64  `json:"bytes"`
+	CreatedAt int64  `json:"created_at"`
+	Filename  string `json:"filename"`
+	Purpose   string `json:"purpose"`
+}
+
+// NativeListDocuments retrieves file information from OpenAI API with retry logic
+// TODO: this is a temporary function to get the file info from OpenAI API (Aug 2025
+//
+//	it should be replaced with ListAllDocuments when the Document type includes a creation date.
+func (fm *OpenAIStore) NativeListDocuments(ctx context.Context) ([]FileInfo, error) {
 	maxRetries := 3
 	for attempt := 1; attempt <= maxRetries; attempt++ {
-		// Create request
 		req, err := http.NewRequestWithContext(ctx, "GET", fm.baseURL+"/files", nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %w", err)
@@ -134,7 +145,6 @@ func (fm *OpenAIStore) ListAllDocuments(ctx context.Context) ([]*aigentic.Docume
 
 		req.Header.Set("Authorization", "Bearer "+fm.apiKey)
 
-		// Make request
 		resp, err := fm.client.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list files: %w", err)
@@ -142,37 +152,20 @@ func (fm *OpenAIStore) ListAllDocuments(ctx context.Context) ([]*aigentic.Docume
 		defer resp.Body.Close()
 
 		if resp.StatusCode == http.StatusOK {
-			// Parse response
 			var listResp struct {
-				Data []struct {
-					ID        string `json:"id"`
-					Object    string `json:"object"`
-					Bytes     int64  `json:"bytes"`
-					CreatedAt int64  `json:"created_at"`
-					Filename  string `json:"filename"`
-					Purpose   string `json:"purpose"`
-				} `json:"data"`
+				Data []FileInfo `json:"data"`
 			}
 
 			if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
 				return nil, fmt.Errorf("failed to decode response: %w", err)
 			}
 
-			// Convert to Document slice
-			var docs []*aigentic.Document
-			for _, file := range listResp.Data {
-				doc := aigentic.NewInMemoryDocument(file.ID, file.Filename, []byte{}, nil)
-				docs = append(docs, doc)
-			}
-
-			return docs, nil
+			return listResp.Data, nil
 		}
 
 		body, _ := io.ReadAll(resp.Body)
 
-		// If it's a server error (5xx), retry with exponential backoff
 		if resp.StatusCode >= 500 && resp.StatusCode < 600 && attempt < maxRetries {
-			// Wait before retrying (exponential backoff)
 			backoff := time.Duration(attempt) * time.Second
 			select {
 			case <-ctx.Done():
@@ -182,11 +175,58 @@ func (fm *OpenAIStore) ListAllDocuments(ctx context.Context) ([]*aigentic.Docume
 			}
 		}
 
-		// For non-retryable errors or final attempt, return the error
 		return nil, fmt.Errorf("list files failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
 	return nil, fmt.Errorf("list files failed after %d attempts", maxRetries)
+}
+
+// ListAllDocuments retrieves all documents from OpenAI and returns them
+func (fm *OpenAIStore) ListAllDocuments(ctx context.Context) ([]*aigentic.Document, error) {
+	files, err := fm.NativeListDocuments(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var docs []*aigentic.Document
+	for _, file := range files {
+		doc := aigentic.NewInMemoryDocument(file.ID, file.Filename, []byte{}, nil)
+		docs = append(docs, doc)
+	}
+
+	return docs, nil
+}
+
+// DeleteOldDocuments deletes documents from OpenAI that are older than the specified duration
+func (fm *OpenAIStore) DeleteOldDocuments(ctx context.Context, maxAge time.Duration) error {
+	files, err := fm.NativeListDocuments(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list documents: %w", err)
+	}
+
+	cutoffTime := time.Now().Add(-maxAge).Unix()
+	var deletionErrors []error
+
+	for _, file := range files {
+		if file.CreatedAt < cutoffTime {
+			if err := fm.DeleteDocument(ctx, file.ID); err != nil {
+				deletionErrors = append(deletionErrors, fmt.Errorf("failed to delete document %s (%s): %w", file.ID, file.Filename, err))
+			}
+		}
+	}
+
+	if len(deletionErrors) > 0 {
+		var errMsg string
+		for i, err := range deletionErrors {
+			if i > 0 {
+				errMsg += "; "
+			}
+			errMsg += err.Error()
+		}
+		return fmt.Errorf("failed to delete some documents: %s", errMsg)
+	}
+
+	return nil
 }
 
 // Close deletes all documents and cleans up

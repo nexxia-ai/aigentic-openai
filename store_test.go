@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nexxia-ai/aigentic"
 	"github.com/nexxia-ai/aigentic/utils"
@@ -539,4 +540,154 @@ func TestErrorHandling(t *testing.T) {
 			t.Logf("✅ Expected error when deleting non-existent file: %v", err)
 		}
 	})
+}
+
+// TestNativeListDocuments tests the NativeListDocuments method and prints old documents
+func TestNativeListDocuments(t *testing.T) {
+	// Require OPENAI_API_KEY environment variable
+	apiKey := os.Getenv("OPENAI_API_KEY")
+	if apiKey == "" {
+		t.Fatal("OPENAI_API_KEY environment variable is required for integration test")
+	}
+
+	// Create file manager
+	fileManager := NewOpenAIFileManager(apiKey)
+	defer fileManager.Close(context.Background())
+
+	// Test listing all documents using NativeListDocuments
+	t.Run("ListAllNativeDocuments", func(t *testing.T) {
+		files, err := fileManager.NativeListDocuments(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to list native documents: %v", err)
+		}
+
+		t.Logf("Found %d total files using NativeListDocuments", len(files))
+
+		// Print basic info about all files
+		for i, file := range files {
+			createdTime := time.Unix(file.CreatedAt, 0)
+			t.Logf("File %d: ID=%s, Name=%s, Size=%d bytes, Created=%s",
+				i+1, file.ID, file.Filename, file.Bytes, createdTime.Format(time.RFC3339))
+		}
+	})
+
+	// Test finding and printing documents older than 1 hour
+	t.Run("PrintOldDocuments", func(t *testing.T) {
+		files, err := fileManager.NativeListDocuments(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to list native documents: %v", err)
+		}
+
+		// Calculate cutoff time (1 hour ago)
+		oneHourAgo := time.Now().Add(-1 * time.Hour)
+		cutoffTime := oneHourAgo.Unix()
+
+		t.Logf("Looking for documents older than: %s", oneHourAgo.Format(time.RFC3339))
+		t.Logf("Cutoff timestamp: %d", cutoffTime)
+
+		// Find and print documents older than 1 hour
+		var oldDocuments []FileInfo
+		for _, file := range files {
+			if file.CreatedAt < cutoffTime {
+				oldDocuments = append(oldDocuments, file)
+			}
+		}
+
+		t.Logf("Found %d documents older than 1 hour:", len(oldDocuments))
+
+		if len(oldDocuments) == 0 {
+			t.Logf("✅ No documents found older than 1 hour")
+		} else {
+			for i, file := range oldDocuments {
+				createdTime := time.Unix(file.CreatedAt, 0)
+				age := time.Since(createdTime)
+				t.Logf("Old Document %d:", i+1)
+				t.Logf("  ID: %s", file.ID)
+				t.Logf("  Filename: %s", file.Filename)
+				t.Logf("  Size: %d bytes", file.Bytes)
+				t.Logf("  Purpose: %s", file.Purpose)
+				t.Logf("  Created: %s", createdTime.Format(time.RFC3339))
+				t.Logf("  Age: %s", age.String())
+				t.Logf("  ---")
+			}
+		}
+	})
+
+	// Upload a test file and verify it appears in the list (and is NOT old)
+	t.Run("UploadAndVerifyNew", func(t *testing.T) {
+		// Create a test file
+		tempFile, err := os.CreateTemp("", "native-list-test-*.txt")
+		if err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+		defer os.Remove(tempFile.Name())
+
+		// Write content
+		testContent := "Test file for NativeListDocuments testing"
+		_, err = tempFile.WriteString(testContent)
+		if err != nil {
+			t.Fatalf("Failed to write to temp file: %v", err)
+		}
+		tempFile.Close()
+
+		// Create Document
+		inputDoc := aigentic.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
+		inputDoc.FilePath = tempFile.Name()
+
+		// Upload file
+		doc, err := fileManager.AddDocument(context.Background(), inputDoc)
+		if err != nil {
+			t.Fatalf("Failed to add file: %v", err)
+		}
+
+		t.Logf("Uploaded test file: ID=%s, Filename=%s", doc.ID(), doc.Filename)
+
+		// List documents again and find our uploaded file
+		files, err := fileManager.NativeListDocuments(context.Background())
+		if err != nil {
+			t.Fatalf("Failed to list native documents after upload: %v", err)
+		}
+
+		// Find our uploaded file
+		var uploadedFile *FileInfo
+		for _, file := range files {
+			if file.ID == doc.ID() {
+				uploadedFile = &file
+				break
+			}
+		}
+
+		if uploadedFile == nil {
+			t.Errorf("Uploaded file not found in NativeListDocuments results")
+		} else {
+			createdTime := time.Unix(uploadedFile.CreatedAt, 0)
+			age := time.Since(createdTime)
+
+			t.Logf("✅ Found uploaded file in NativeListDocuments:")
+			t.Logf("  ID: %s", uploadedFile.ID)
+			t.Logf("  Filename: %s", uploadedFile.Filename)
+			t.Logf("  Size: %d bytes", uploadedFile.Bytes)
+			t.Logf("  Purpose: %s", uploadedFile.Purpose)
+			t.Logf("  Created: %s", createdTime.Format(time.RFC3339))
+			t.Logf("  Age: %s", age.String())
+
+			// Verify this file is NOT older than 1 hour
+			oneHourAgo := time.Now().Add(-1 * time.Hour)
+			if uploadedFile.CreatedAt < oneHourAgo.Unix() {
+				t.Errorf("Newly uploaded file appears to be older than 1 hour - this shouldn't happen")
+			} else {
+				t.Logf("✅ Newly uploaded file is correctly identified as recent (not older than 1 hour)")
+			}
+		}
+
+		// Clean up the test file
+		err = fileManager.DeleteDocument(context.Background(), doc.ID())
+		if err != nil {
+			t.Logf("Failed to clean up test file: %v", err)
+		} else {
+			t.Logf("✅ Successfully cleaned up test file")
+		}
+	})
+
+	t.Logf("✅ NativeListDocuments test completed successfully")
 }
