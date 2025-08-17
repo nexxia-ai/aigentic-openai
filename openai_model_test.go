@@ -1,4 +1,4 @@
-//go:build integration
+////go:build integration
 
 // run this with: go test -v -tags=integration -run ^TestOpenAI_ModelSuite
 
@@ -25,6 +25,6 @@ func TestOpenAI_ModelSuite(t *testing.T) {
 	ai.RunModelTestSuite(t, suite)
 }
 
-func TODO_TestOpenAI_ProcessImage(t *testing.T) {
-	ai.TestProcessImage(t, NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY")))
+func TestOpenAI_ProcessImage(t *testing.T) {
+	ai.TestProcessImage(t, NewModel("gpt-4o", os.Getenv("OPENAI_API_KEY")))
 }

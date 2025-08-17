@@ -50,9 +50,16 @@ type OpenAIChatStreamResponse struct {
 
 // OpenAIContentPart represents a single content part in a message
 type OpenAIContentPart struct {
-	Type string      `json:"type"`
-	Text string      `json:"text,omitempty"`
-	File *OpenAIFile `json:"file,omitempty"`
+	Type     string          `json:"type"`
+	Text     string          `json:"text,omitempty"`
+	File     *OpenAIFile     `json:"file,omitempty"`
+	ImageURL *OpenAIImageURL `json:"image_url,omitempty"`
+}
+
+// OpenAIImageURL represents an image URL in a message
+type OpenAIImageURL struct {
+	URL    string `json:"url"`
+	Detail string `json:"detail,omitempty"`
 }
 
 // OpenAIFile represents a file reference in a message
@@ -234,11 +241,29 @@ func openAIConvertMessages(messages []ai.Message) []OpenAIMessage {
 				}
 				openaiMessages[i].Content = contentParts
 			} else if r.MIMEType != "" && strings.HasPrefix(r.MIMEType, "image/") {
-				// Handle image content with proper data URL format
+				// Handle image content with proper content parts structure
 				if bodyBytes, ok := r.Body.([]byte); ok {
 					base64Data := base64.StdEncoding.EncodeToString(bodyBytes)
 					dataURL := fmt.Sprintf("data:%s;base64,%s", r.MIMEType, base64Data)
-					openaiMessages[i].Content = dataURL
+
+					contentParts := []OpenAIContentPart{
+						{
+							Type: "image_url",
+							ImageURL: &OpenAIImageURL{
+								URL:    dataURL,
+								Detail: "auto", // Let OpenAI decide the level of detail
+							},
+						},
+					}
+
+					// Add text content if there's a description
+					if r.Description != "" {
+						contentParts = append(contentParts, OpenAIContentPart{Type: "text", Text: r.Description})
+					} else if r.Name != "" {
+						contentParts = append(contentParts, OpenAIContentPart{Type: "text", Text: "Image: " + r.Name})
+					}
+
+					openaiMessages[i].Content = contentParts
 				} else {
 					// Fallback for non-byte body
 					openaiMessages[i].Content = r.Body
