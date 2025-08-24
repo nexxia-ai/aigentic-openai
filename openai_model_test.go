@@ -1,4 +1,4 @@
-////go:build integration
+//go:build integration
 
 // run this with: go test -v -tags=integration -run ^TestOpenAI_ModelSuite
 

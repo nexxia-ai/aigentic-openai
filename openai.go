@@ -526,10 +526,14 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 			choice := chunk.Choices[0]
 
 			// Handle new content from this chunk
-			var newContent string
+			// var newContent string
+			var contentForChunk string
+			var thinkForChunk string
+
 			if choice.Delta.Content != "" {
-				newContent = choice.Delta.Content
-				accumulatedContent.WriteString(newContent)
+				contentForChunk, thinkForChunk = ai.ExtractThinkTags(choice.Delta.Content)
+				accumulatedContent.WriteString(contentForChunk)
+				accumulatedThink.WriteString(thinkForChunk)
 			}
 
 			// Handle tool calls
@@ -545,8 +549,9 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 						}
 					}
 
-					// Accumulate arguments
-					if deltaToolCall.FunctionCall.Arguments != "" {
+					// If we have a valid tool call, accumulate arguments
+					// long arguments are sent in multiple chunks
+					if toolCallsMap[index] != nil && deltaToolCall.FunctionCall.Arguments != "" {
 						toolCallsMap[index].Args += deltaToolCall.FunctionCall.Arguments
 					}
 				}
@@ -558,15 +563,7 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 			}
 
 			// Only send chunks when there's actually new content
-			if newContent != "" || len(choice.Delta.ToolCalls) > 0 {
-				// Extract think tags from the new content only
-				contentForChunk, thinkForChunk := ai.ExtractThinkTags(newContent)
-
-				// Accumulate think content separately
-				if thinkForChunk != "" {
-					accumulatedThink.WriteString(thinkForChunk)
-				}
-
+			if contentForChunk != "" || thinkForChunk != "" {
 				// Create partial message for chunk function (only new content, no accumulated data)
 				partialMessage := ai.AIMessage{
 					Role:    finalMessage.Role,
@@ -592,16 +589,8 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 		return ai.AIMessage{}, fmt.Errorf("error reading SSE stream: %w", err)
 	}
 
-	// Extract think tags from final accumulated content
-	finalContent, finalThink := ai.ExtractThinkTags(accumulatedContent.String())
-
-	// Combine accumulated think content with final think content
-	if finalThink != "" {
-		accumulatedThink.WriteString(finalThink)
-	}
-
 	// Set final accumulated content (without think tags) and think content
-	finalMessage.Content = finalContent
+	finalMessage.Content = accumulatedContent.String()
 	finalMessage.Think = accumulatedThink.String()
 
 	var finalToolCalls []ai.ToolCall
