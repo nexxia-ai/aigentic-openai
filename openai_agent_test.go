@@ -36,6 +36,17 @@ func TestOpenAI_AgentSuite_OpenRouter(t *testing.T) {
 		},
 	})
 }
+func TestOpenAI_AgentSuite_Helicone(t *testing.T) {
+	aigentic.RunIntegrationTestSuite(t, aigentic.IntegrationTestSuite{
+		NewModel: func() *ai.Model {
+			return NewModel("gpt-4o-mini", os.Getenv("HELICONE_API_KEY"), HeliconeBaseURL)
+		},
+		Name: "OpenRouter",
+		SkipTests: []string{
+			"TeamCoordination",
+		},
+	})
+}
 
 func TestOpenAI_BasicAgent(t *testing.T) {
 	model := NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))

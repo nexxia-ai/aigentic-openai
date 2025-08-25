@@ -1,4 +1,4 @@
-//go:build integration
+////go:build integration
 
 // run this with: go test -v -tags=integration -run ^TestOpenAI_ModelSuite
 
@@ -31,6 +31,19 @@ func TestOpenAI_ModelSuite_OpenRouter(t *testing.T) {
 			return NewModel("qwen/qwen3-30b-a3b-instruct-2507", os.Getenv("OPENROUTER_API_KEY"), OpenRouterBaseURL)
 		},
 		Name: "OpenRouter",
+		SkipTests: []string{
+			"ProcessImage",
+		},
+	}
+	ai.RunModelTestSuite(t, suite)
+}
+
+func TestOpenAI_ModelSuite_Helicone(t *testing.T) {
+	suite := ai.ModelTestSuite{
+		NewModel: func() *ai.Model {
+			return NewModel("gpt-4o-mini", os.Getenv("HELICONE_API_KEY"), HeliconeBaseURL)
+		},
+		Name: "Helicone",
 		SkipTests: []string{
 			"ProcessImage",
 		},

@@ -20,6 +20,7 @@ import (
 const (
 	OpenAIBaseURL     = "https://api.openai.com/v1"
 	OpenRouterBaseURL = "https://openrouter.ai/api/v1"
+	HeliconeBaseURL   = "https://ai-gateway.helicone.ai/v1"
 )
 
 // OpenAI-specific request/response types
