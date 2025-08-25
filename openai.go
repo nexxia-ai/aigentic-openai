@@ -17,6 +17,11 @@ import (
 	"github.com/nexxia-ai/aigentic/ai"
 )
 
+const (
+	OpenAIBaseURL     = "https://api.openai.com/v1"
+	OpenRouterBaseURL = "https://openrouter.ai/api/v1"
+)
+
 // OpenAI-specific request/response types
 type OpenAIChatRequest struct {
 	Model            string          `json:"model"`
@@ -131,15 +136,25 @@ type OpenAIChatResponse struct {
 }
 
 // NewModel creates a new OpenAI model using the model struct
-func NewModel(modelName string, apiKey string) *ai.Model {
+func NewModel(modelName string, apiKey string, baseURL ...string) *ai.Model {
+	url := OpenAIBaseURL
+	if len(baseURL) > 0 {
+		url = baseURL[0]
+	}
+
 	if apiKey == "" {
-		apiKey = os.Getenv("OPENAI_API_KEY")
+		switch url {
+		case OpenRouterBaseURL:
+			apiKey = os.Getenv("OPENROUTER_API_KEY")
+		default:
+			apiKey = os.Getenv("OPENAI_API_KEY")
+		}
 	}
 
 	model := &ai.Model{
 		ModelName: modelName,
 		APIKey:    apiKey,
-		BaseURL:   "https://api.openai.com/v1",
+		BaseURL:   url,
 	}
 	model.SetGenerateFunc(openaiGenerate)
 	model.SetStreamingFunc(openaiStream)

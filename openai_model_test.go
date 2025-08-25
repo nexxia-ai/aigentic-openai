@@ -25,6 +25,19 @@ func TestOpenAI_ModelSuite(t *testing.T) {
 	ai.RunModelTestSuite(t, suite)
 }
 
+func TestOpenAI_ModelSuite_OpenRouter(t *testing.T) {
+	suite := ai.ModelTestSuite{
+		NewModel: func() *ai.Model {
+			return NewModel("qwen/qwen3-30b-a3b-instruct-2507", os.Getenv("OPENROUTER_API_KEY"), OpenRouterBaseURL)
+		},
+		Name: "OpenRouter",
+		SkipTests: []string{
+			"ProcessImage",
+		},
+	}
+	ai.RunModelTestSuite(t, suite)
+}
+
 func TestOpenAI_ProcessImage(t *testing.T) {
 	ai.TestProcessImage(t, NewModel("gpt-4o", os.Getenv("OPENAI_API_KEY")))
 }
