@@ -10,6 +10,7 @@ import (
 
 	"github.com/nexxia-ai/aigentic"
 	"github.com/nexxia-ai/aigentic/ai"
+	"github.com/nexxia-ai/aigentic/document"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -68,14 +69,14 @@ func TestOpenAI_Agent_WithFileID(t *testing.T) {
 	model := NewModel("o4-mini", "")
 
 	// Create a document reference for the file ID
-	fileDoc := aigentic.NewInMemoryDocument("file-WjBr55R67mVmhXCsvKZ6Zs", "document.pdf", nil, nil)
+	fileDoc := document.NewInMemoryDocument("file-WjBr55R67mVmhXCsvKZ6Zs", "document.pdf", nil, nil)
 
 	agent := aigentic.Agent{
 		Model:              model,
 		Description:        "You are a helpful assistant that analyzes files and provides insights.",
 		Instructions:       "When you see a file reference, analyze it and provide a summary. If you cannot access the file, explain why.",
 		Trace:              aigentic.NewTrace(),
-		DocumentReferences: []*aigentic.Document{fileDoc},
+		DocumentReferences: []*document.Document{fileDoc},
 	}
 
 	// Test the agent with file ID
