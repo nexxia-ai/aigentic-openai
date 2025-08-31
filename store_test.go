@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nexxia-ai/aigentic"
+	"github.com/nexxia-ai/aigentic/document"
 	"github.com/nexxia-ai/aigentic/utils"
 )
 
@@ -47,7 +47,7 @@ func TestSimpleAddAndDelete(t *testing.T) {
 	t.Logf("Created test file: %s (%d bytes)", tempFile.Name(), len(testContent))
 
 	// Create Document
-	inputDoc := aigentic.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
+	inputDoc := document.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
 	inputDoc.FilePath = tempFile.Name()
 
 	// Upload file
@@ -133,7 +133,7 @@ End of file.`
 	t.Logf("Created test file: %s (%d bytes)", tempFile.Name(), len(testContent))
 
 	// Create Document
-	inputDoc := aigentic.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
+	inputDoc := document.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
 	inputDoc.FilePath = tempFile.Name()
 
 	// Upload file
@@ -214,7 +214,7 @@ func TestMultipleFiles(t *testing.T) {
 	defer fileManager.Close(context.Background())
 
 	// Upload multiple files
-	var docs []*aigentic.Document
+	var docs []*document.Document
 	for i := 1; i <= 3; i++ {
 		// Create a test file
 		tempFile, err := os.CreateTemp("", fmt.Sprintf("multi-test-%d-*.txt", i))
@@ -232,7 +232,7 @@ func TestMultipleFiles(t *testing.T) {
 		tempFile.Close()
 
 		// Create Document
-		inputDoc := aigentic.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
+		inputDoc := document.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
 		inputDoc.FilePath = tempFile.Name()
 
 		// Upload file
@@ -322,7 +322,7 @@ func TestFileContentRetrieval(t *testing.T) {
 	tempFile.Close()
 
 	// Create Document
-	inputDoc := aigentic.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
+	inputDoc := document.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
 	inputDoc.FilePath = tempFile.Name()
 
 	// Upload file
@@ -397,7 +397,7 @@ func TestCleanupOnClose(t *testing.T) {
 	tempFile.Close()
 
 	// Create Document
-	inputDoc := aigentic.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
+	inputDoc := document.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
 	inputDoc.FilePath = tempFile.Name()
 
 	// Upload file
@@ -453,7 +453,7 @@ func TestOpenByFileID(t *testing.T) {
 	tempFile.Close()
 
 	// Create Document
-	inputDoc := aigentic.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
+	inputDoc := document.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
 	inputDoc.FilePath = tempFile.Name()
 
 	// Upload file to get a file ID
@@ -520,7 +520,7 @@ func TestErrorHandling(t *testing.T) {
 	// Test uploading non-existent file
 	t.Run("NonExistentFile", func(t *testing.T) {
 		// Create Document with non-existent file path
-		nonExistentDoc := aigentic.NewInMemoryDocument("non-existent-file.txt", "non-existent-file.txt", []byte{}, nil)
+		nonExistentDoc := document.NewInMemoryDocument("non-existent-file.txt", "non-existent-file.txt", []byte{}, nil)
 		nonExistentDoc.FilePath = "non-existent-file.txt"
 
 		_, err := fileManager.AddDocument(context.Background(), nonExistentDoc)
@@ -631,7 +631,7 @@ func TestNativeListDocuments(t *testing.T) {
 		tempFile.Close()
 
 		// Create Document
-		inputDoc := aigentic.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
+		inputDoc := document.NewInMemoryDocument(filepath.Base(tempFile.Name()), filepath.Base(tempFile.Name()), []byte(testContent), nil)
 		inputDoc.FilePath = tempFile.Name()
 
 		// Upload file

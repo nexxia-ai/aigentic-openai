@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nexxia-ai/aigentic"
+	"github.com/nexxia-ai/aigentic/document"
 )
 
 // OpenAIStore manages temporary files for OpenAI chat sessions
@@ -20,11 +20,11 @@ type OpenAIStore struct {
 	apiKey  string
 	baseURL string
 	client  *http.Client
-	docs    map[string]*aigentic.Document // Track uploaded documents
+	docs    map[string]*document.Document // Track uploaded documents
 	mu      sync.RWMutex
 }
 
-var _ aigentic.DocumentStore = &OpenAIStore{}
+var _ document.DocumentStore = &OpenAIStore{}
 
 // NewOpenAIFileManager creates a new OpenAI file manager
 func NewOpenAIFileManager(apiKey string) *OpenAIStore {
@@ -36,12 +36,12 @@ func NewOpenAIFileManager(apiKey string) *OpenAIStore {
 		apiKey:  apiKey,
 		baseURL: "https://api.openai.com/v1",
 		client:  &http.Client{Timeout: 60 * time.Second},
-		docs:    make(map[string]*aigentic.Document),
+		docs:    make(map[string]*document.Document),
 	}
 }
 
 // Open implements the DocumentStore interface - retrieves a file from OpenAI by ID
-func (fm *OpenAIStore) Open(ctx context.Context, fileID string) (*aigentic.Document, error) {
+func (fm *OpenAIStore) Open(ctx context.Context, fileID string) (*document.Document, error) {
 	// Check if we already have this document in memory
 	fm.mu.RLock()
 	if doc, exists := fm.docs[fileID]; exists {
@@ -57,7 +57,7 @@ func (fm *OpenAIStore) Open(ctx context.Context, fileID string) (*aigentic.Docum
 	}
 
 	// Create Document
-	doc := aigentic.NewInMemoryDocument(fileID, fileInfo.Filename, []byte{}, nil)
+	doc := document.NewInMemoryDocument(fileID, fileInfo.Filename, []byte{}, nil)
 
 	// Store in memory
 	fm.mu.Lock()
@@ -68,7 +68,7 @@ func (fm *OpenAIStore) Open(ctx context.Context, fileID string) (*aigentic.Docum
 }
 
 // AddDocument uploads a document to OpenAI and returns the document
-func (fm *OpenAIStore) AddDocument(ctx context.Context, doc *aigentic.Document) (*aigentic.Document, error) {
+func (fm *OpenAIStore) AddDocument(ctx context.Context, doc *document.Document) (*document.Document, error) {
 	// Get document content using Bytes()
 	content, err := doc.Bytes()
 	if err != nil {
@@ -82,7 +82,7 @@ func (fm *OpenAIStore) AddDocument(ctx context.Context, doc *aigentic.Document) 
 	}
 
 	// Create Document
-	uploadedDoc := aigentic.NewInMemoryDocument(fileID, doc.Filename, content, nil)
+	uploadedDoc := document.NewInMemoryDocument(fileID, doc.Filename, content, nil)
 
 	// Store in memory
 	fm.mu.Lock()
@@ -109,11 +109,11 @@ func (fm *OpenAIStore) DeleteDocument(ctx context.Context, docID string) error {
 }
 
 // ListDocuments retrieves documents created by this instance
-func (fm *OpenAIStore) ListDocuments() []*aigentic.Document {
+func (fm *OpenAIStore) ListDocuments() []*document.Document {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 
-	docs := make([]*aigentic.Document, 0, len(fm.docs))
+	docs := make([]*document.Document, 0, len(fm.docs))
 	for _, doc := range fm.docs {
 		docs = append(docs, doc)
 	}
@@ -182,15 +182,15 @@ func (fm *OpenAIStore) NativeListDocuments(ctx context.Context) ([]FileInfo, err
 }
 
 // ListAllDocuments retrieves all documents from OpenAI and returns them
-func (fm *OpenAIStore) ListAllDocuments(ctx context.Context) ([]*aigentic.Document, error) {
+func (fm *OpenAIStore) ListAllDocuments(ctx context.Context) ([]*document.Document, error) {
 	files, err := fm.NativeListDocuments(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var docs []*aigentic.Document
+	var docs []*document.Document
 	for _, file := range files {
-		doc := aigentic.NewInMemoryDocument(file.ID, file.Filename, []byte{}, nil)
+		doc := document.NewInMemoryDocument(file.ID, file.Filename, []byte{}, nil)
 		docs = append(docs, doc)
 	}
 
@@ -249,7 +249,7 @@ func (fm *OpenAIStore) Close(ctx context.Context) error {
 }
 
 // uploadBytesToOpenAI uploads a document to OpenAI's file API
-func (fm *OpenAIStore) uploadBytesToOpenAI(ctx context.Context, doc *aigentic.Document) (string, error) {
+func (fm *OpenAIStore) uploadBytesToOpenAI(ctx context.Context, doc *document.Document) (string, error) {
 	// Retry logic for server errors
 	maxRetries := 3
 	for attempt := 1; attempt <= maxRetries; attempt++ {
