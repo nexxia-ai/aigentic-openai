@@ -26,7 +26,7 @@ func TestOpenAI_AgentSuite(t *testing.T) {
 	})
 }
 
-func TestOpenAI_AgentSuite_OpenRouter(t *testing.T) {
+func TestOpenAI_OpenRouter(t *testing.T) {
 	aigentic.RunIntegrationTestSuite(t, aigentic.IntegrationTestSuite{
 		NewModel: func() *ai.Model {
 			return NewModel("qwen/qwen3-30b-a3b-instruct-2507", os.Getenv("OPENROUTER_API_KEY"), OpenRouterBaseURL)
@@ -37,7 +37,7 @@ func TestOpenAI_AgentSuite_OpenRouter(t *testing.T) {
 		},
 	})
 }
-func TestOpenAI_AgentSuite_Helicone(t *testing.T) {
+func TestOpenAI_Helicone(t *testing.T) {
 	aigentic.RunIntegrationTestSuite(t, aigentic.IntegrationTestSuite{
 		NewModel: func() *ai.Model {
 			return NewModel("gpt-4o-mini", os.Getenv("HELICONE_API_KEY"), HeliconeBaseURL)
