@@ -1,4 +1,4 @@
-////go:build integration
+//go:build integration
 
 // run this with: go test -v -tags=integration -run ^TestOpenAI_ModelSuite
 
@@ -15,7 +15,11 @@ import (
 func TestOpenAI_ModelSuite(t *testing.T) {
 	suite := ai.ModelTestSuite{
 		NewModel: func() *ai.Model {
-			return NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))
+			model, err := ai.New("openai/gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))
+			if err != nil {
+				t.Fatalf("Failed to create model: %v", err)
+			}
+			return model
 		},
 		Name: "OpenAI",
 		SkipTests: []string{
@@ -28,7 +32,11 @@ func TestOpenAI_ModelSuite(t *testing.T) {
 func TestOpenAI_ModelSuite_OpenRouter(t *testing.T) {
 	suite := ai.ModelTestSuite{
 		NewModel: func() *ai.Model {
-			return NewModel("qwen/qwen3-30b-a3b-instruct-2507", os.Getenv("OPENROUTER_API_KEY"), OpenRouterBaseURL)
+			model, err := ai.New("openrouter/qwen/qwen3-30b-a3b-instruct-2507", os.Getenv("OPENROUTER_API_KEY"))
+			if err != nil {
+				t.Fatalf("Failed to create model: %v", err)
+			}
+			return model
 		},
 		Name: "OpenRouter",
 		SkipTests: []string{

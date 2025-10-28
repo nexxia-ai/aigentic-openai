@@ -136,19 +136,55 @@ type OpenAIChatResponse struct {
 	ServiceTier string `json:"service_tier"`
 }
 
+func init() {
+	ai.RegisterModel("openai", "gpt-4o-mini", ai.ModelInfo{
+		DisplayName: "GPT-4o Mini",
+		Family:      "gpt",
+		NewModel:    NewModel,
+	})
+	ai.RegisterModel("openai", "gpt-4o", ai.ModelInfo{
+		DisplayName: "GPT-4o",
+		Family:      "gpt",
+		NewModel:    NewModel,
+	})
+	ai.RegisterModel("openai", "gpt-5", ai.ModelInfo{
+		DisplayName: "GPT-5",
+		Family:      "gpt",
+		NewModel:    NewModel,
+	})
+	ai.RegisterModel("openai", "gpt-5-mini", ai.ModelInfo{
+		DisplayName: "GPT-5 Mini",
+		Family:      "gpt",
+		NewModel:    NewModel,
+	})
+	ai.RegisterModel("openrouter", "qwen/qwen3-30b-a3b-instruct-2507", ai.ModelInfo{
+		DisplayName: "Qwen3 30B (OpenRouter)",
+		BaseURL:     OpenRouterBaseURL,
+		Family:      "qwen",
+		NewModel:    NewModel,
+	})
+}
+
 // NewModel creates a new OpenAI model using the model struct
 func NewModel(modelName string, apiKey string, baseURL ...string) *ai.Model {
 	url := OpenAIBaseURL
-	if len(baseURL) > 0 {
+	if len(baseURL) > 0 && baseURL[0] != "" {
 		url = baseURL[0]
 	}
 
+	slog.Debug("openai.NewModel", "modelName", modelName, "apiKey", apiKey, "baseURL", OpenRouterBaseURL)
 	if apiKey == "" {
 		switch url {
 		case OpenRouterBaseURL:
 			apiKey = os.Getenv("OPENROUTER_API_KEY")
+			if apiKey == "" {
+				slog.Error("OPENROUTER_API_KEY is not set")
+			}
 		default:
 			apiKey = os.Getenv("OPENAI_API_KEY")
+			if apiKey == "" {
+				slog.Error("OPENAI_API_KEY is not set")
+			}
 		}
 	}
 
