@@ -463,6 +463,61 @@ func openaiREST(ctx context.Context, model *ai.Model, messages []OpenAIMessage, 
 	return msg, nil
 }
 
+type streamingThinkParser struct {
+	buffer     string
+	inThinkTag bool
+}
+
+func (p *streamingThinkParser) addChunk(rawChunk string) (contentChunk string, thinkChunk string) {
+	p.buffer += rawChunk
+
+	for {
+		if !p.inThinkTag {
+			startIdx := strings.Index(p.buffer, "<think>")
+			if startIdx == -1 {
+				contentChunk = p.buffer
+				p.buffer = ""
+				return contentChunk, ""
+			}
+
+			if startIdx > 0 {
+				contentChunk = p.buffer[:startIdx]
+				p.buffer = p.buffer[startIdx:]
+				return contentChunk, ""
+			}
+
+			if len(p.buffer) >= len("<think>") {
+				p.inThinkTag = true
+				p.buffer = p.buffer[len("<think>"):]
+				continue
+			}
+
+			return "", ""
+		} else {
+			endIdx := strings.Index(p.buffer, "</think>")
+			if endIdx == -1 {
+				if len(p.buffer) > 0 {
+					thinkChunk = p.buffer
+					p.buffer = ""
+				}
+				return "", thinkChunk
+			}
+
+			thinkChunk = p.buffer[:endIdx]
+			p.buffer = p.buffer[endIdx+len("</think>"):]
+			p.inThinkTag = false
+			return "", thinkChunk
+		}
+	}
+}
+
+func (p *streamingThinkParser) flush() (contentChunk string, thinkChunk string) {
+	if p.inThinkTag {
+		return "", p.buffer
+	}
+	return p.buffer, ""
+}
+
 // openaiStreamREST makes a streaming call to the OpenAI API
 func openaiStreamREST(ctx context.Context, model *ai.Model, messages []OpenAIMessage, tools []OpenAITool, chunkFunction func(ai.AIMessage) error) (ai.AIMessage, error) {
 	req := &OpenAIChatRequest{
@@ -536,6 +591,7 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 	var responseID string
 	var responseCreated int64
 	var responseModel string
+	parser := &streamingThinkParser{}
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -578,12 +634,11 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 			choice := chunk.Choices[0]
 
 			// Handle new content from this chunk
-			// var newContent string
 			var contentForChunk string
 			var thinkForChunk string
 
 			if choice.Delta.Content != "" {
-				contentForChunk, thinkForChunk = ai.ExtractThinkTags(choice.Delta.Content)
+				contentForChunk, thinkForChunk = parser.addChunk(choice.Delta.Content)
 				accumulatedContent.WriteString(contentForChunk)
 				accumulatedThink.WriteString(thinkForChunk)
 			}
@@ -634,6 +689,25 @@ func parseSSEResponse(resp *http.Response, chunkFunction func(ai.AIMessage) erro
 			if choice.FinishReason != "" {
 				break
 			}
+		}
+	}
+
+	// Flush any remaining content in the parser buffer
+	flushContent, flushThink := parser.flush()
+	if flushContent != "" {
+		accumulatedContent.WriteString(flushContent)
+	}
+	if flushThink != "" {
+		accumulatedThink.WriteString(flushThink)
+	}
+	if flushContent != "" || flushThink != "" {
+		partialMessage := ai.AIMessage{
+			Role:    finalMessage.Role,
+			Content: flushContent,
+			Think:   flushThink,
+		}
+		if err := chunkFunction(partialMessage); err != nil {
+			return ai.AIMessage{}, err
 		}
 	}
 

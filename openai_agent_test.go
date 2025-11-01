@@ -12,6 +12,7 @@ import (
 	"github.com/nexxia-ai/aigentic/ai"
 	"github.com/nexxia-ai/aigentic/document"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOpenAI_AgentSuite(t *testing.T) {
@@ -75,11 +76,38 @@ func TestOpenAI_Agent_WithFileID(t *testing.T) {
 		Model:              model,
 		Description:        "You are a helpful assistant that analyzes files and provides insights.",
 		Instructions:       "When you see a file reference, analyze it and provide a summary. If you cannot access the file, explain why.",
-		Trace:              aigentic.NewTrace(),
+		Tracer:             aigentic.NewTracer(),
 		DocumentReferences: []*document.Document{fileDoc},
 	}
 
 	// Test the agent with file ID
 	_, err := agent.Execute("Please analyze the attached file and tell me what it contains. If you can access it, start your response with 'SUCCESS:' followed by the analysis.")
 	assert.NoError(t, err)
+}
+
+func TestOpenAI_TraceFilepath(t *testing.T) {
+	if os.Getenv("OPENAI_API_KEY") == "" {
+		t.Skip("Skipping OpenAI integration test: OPENAI_API_KEY not set")
+	}
+
+	model := NewModel("gpt-4o-mini", os.Getenv("OPENAI_API_KEY"))
+
+	agent := aigentic.Agent{
+		Model:        model,
+		Description:  "Test agent",
+		Instructions: "Respond briefly",
+		Tracer:       aigentic.NewTracer(),
+	}
+
+	run, err := agent.Start("Say hello")
+	require.NoError(t, err)
+
+	_, err = run.Wait(0)
+	require.NoError(t, err)
+
+	filePath := run.TraceFilepath()
+	require.NotEmpty(t, filePath, "TraceFilepath should return a non-empty path after run completes")
+
+	_, err = os.Stat(filePath)
+	require.NoError(t, err, "Trace file should exist at the returned path")
 }
